@@ -35,6 +35,8 @@
     border-radius: 15px;
     display: none;
     z-index: 20;
+    max-width: 90vw;
+    text-align: center;
   }
   #restart-btn {
     position: fixed;
@@ -189,13 +191,13 @@
     fastTimer: 0,
     slowEnemyTimer: 0,
     beeHits: 0,  // toques da abelha
+    invincibleTimer: 0,
   };
+  const INVINCIBLE_TIME = 60; // 1s de invencibilidade
 
-  // Mundo infinito, pos player = centro, tudo deslocado em relação a ele
-
-  // Itens no mapa - cada item é {x,y,type}
+  // Itens no mapa - cada item é {x,y,type,size}
   let coins = [];
-  let items = []; // verdes, roxos, laranja
+  let items = []; // verdes, roxos, laranja, extra
   let enemies = []; // azuis (3), rosa (max), abelha (círculo amarelo)
 
   // Cores e tamanhos dos itens
@@ -208,6 +210,7 @@
     life: 'green',
     speed: 'purple',
     slowEnemy: 'orange',
+    extra: 'cyan',
   };
   const sizes = {
     player: 30,
@@ -218,6 +221,7 @@
     life: 20,
     speed: 20,
     slowEnemy: 20,
+    extra: 20,
   };
 
   // Atualiza UI
@@ -232,107 +236,52 @@
   }
 
   // Spawn aleatório em volta do player, fora do raio minDist
-  function spawnAroundPlayer(minDist=500, maxDist=1000) {
+  function randomPositionAroundPlayer(minDist=500, maxDist=1000) {
     const angle = Math.random() * 2 * Math.PI;
-    const distRand = minDist + Math.random()*(maxDist - minDist);
+    const distance = minDist + Math.random() * (maxDist - minDist);
     return {
-      x: player.x + Math.cos(angle)*distRand,
-      y: player.y + Math.sin(angle)*distRand,
+      x: player.x + Math.cos(angle)*distance,
+      y: player.y + Math.sin(angle)*distance
     };
   }
 
-  // Criar inimigos azuis (3)
-  function spawnEnemiesCommon() {
-    while(enemies.filter(e => e.type === 'enemyCommon').length < 3) {
-      const pos = spawnAroundPlayer(500, 900);
-      enemies.push({
-        ...pos,
-        type: 'enemyCommon',
-        size: sizes.enemyCommon,
-        speed: 2,
-      });
+  // Inicializar entidades no mapa
+  function initEntities() {
+    coins = [];
+    items = [];
+    enemies = [];
+
+    // Spawn moedas (50)
+    for(let i=0; i<50; i++) {
+      const pos = randomPositionAroundPlayer(100, 2000);
+      coins.push({x: pos.x, y: pos.y, size: sizes.coin});
     }
-  }
 
-  // Criar inimigo rosa (max) raro (chance 0.01 por frame)
-  function trySpawnEnemyMax() {
-    if(enemies.some(e=>e.type === 'enemyMax')) return; // só 1
-    if(Math.random() < 0.001) {
-      const pos = spawnAroundPlayer(600, 1000);
-      enemies.push({
-        ...pos,
-        type: 'enemyMax',
-        size: sizes.enemyMax,
-        speed: 1.5,
-      });
+    // Spawn itens (mais chance de itens que moedas)
+    const itemTypes = ['life', 'speed', 'slowEnemy', 'extra'];
+    for(let i=0; i<20; i++) {
+      const pos = randomPositionAroundPlayer(100, 1800);
+      const type = itemTypes[Math.floor(Math.random()*itemTypes.length)];
+      items.push({x: pos.x, y: pos.y, type, size: sizes[type]});
     }
-  }
 
-  // Criar abelha (círculo amarelo) só uma de cada vez
-  function trySpawnBee() {
-    if(enemies.some(e=>e.type === 'bee')) return;
-    if(Math.random() < 0.0008) {
-      const pos = spawnAroundPlayer(600, 1200);
-      enemies.push({
-        ...pos,
-        type: 'bee',
-        size: sizes.bee,
-        speed: 3,
-        hitsOnPlayer: 0, // contar toques
-      });
+    // Spawn inimigos azuis (3)
+    for(let i=0; i<3; i++) {
+      const pos = randomPositionAroundPlayer(500, 1200);
+      enemies.push({x: pos.x, y: pos.y, size: sizes.enemyCommon, speed: 2, type: 'enemyCommon'});
     }
-  }
 
-  // Itens: vida (green), speed (purple), slowEnemy (orange)
-  function trySpawnItem() {
-    if(items.length > 20) return;
-    if(Math.random() < 0.02) {
-      const pos = spawnAroundPlayer(400, 1000);
-      const r = Math.random();
-      let type = 'life';
-      if(r < 0.4) type = 'life';
-      else if(r < 0.7) type = 'speed';
-      else if(r < 0.95) type = 'slowEnemy';
-      else type = 'extra'; // novo item que pode criar
-
-      items.push({
-        ...pos,
-        type,
-        size: sizes.life,
-      });
+    // Spawn inimigo rosa (1 raro)
+    if(Math.random() < 0.3) { // 30% chance
+      const pos = randomPositionAroundPlayer(500, 1200);
+      enemies.push({x: pos.x, y: pos.y, size: sizes.enemyMax, speed: 1.5, type: 'enemyMax'});
     }
-  }
 
-  // Moedas amarelas aparecem diversas pelo mapa
-  function trySpawnCoin() {
-    if(coins.length > 40) return;
-    if(Math.random() < 0.05) {
-      const pos = spawnAroundPlayer(100, 1500);
-      coins.push({
-        ...pos,
-        size: sizes.coin,
-      });
+    // Spawn abelha (1 circulo amarelo) raro
+    if(Math.random() < 0.2) { // 20% chance
+      const pos = randomPositionAroundPlayer(500, 1200);
+      enemies.push({x: pos.x, y: pos.y, size: sizes.bee, speed: 3, type: 'bee', hitsOnPlayer: 0, invincibleTimer:0});
     }
-  }
-
-  // Reinicia jogo
-  function restartGame() {
-    gameOver = false;
-    deathReason = "";
-    player.x = 0;
-    player.y = 0;
-    player.lives = 2;
-    player.coins = 0;
-    player.sizeIncrease = 0;
-    player.fastTimer = 0;
-    player.slowEnemyTimer = 0;
-    player.beeHits = 0;
-    enemies.length = 0;
-    coins.length = 0;
-    items.length = 0;
-    updateUI();
-    messageElem.style.display = 'none';
-    restartBtn.style.display = 'none';
   }
 
   // Colisão entre retângulos
@@ -342,18 +291,17 @@
 
   // Colisão círculo e retângulo
   function circleRectCollide(cx,cy,cr,x,y,w,h) {
-    // encontra o ponto mais próximo na caixa ao círculo
-  let closestX = Math.max(x, Math.min(cx, x + w));
+    let closestX = Math.max(x, Math.min(cx, x + w));
     let closestY = Math.max(y, Math.min(cy, y + h));
-
     let dx = cx - closestX;
     let dy = cy - closestY;
-
     return (dx * dx + dy * dy) < (cr * cr);
   }
 
   // Atualiza posição do jogador baseado nas teclas
   function updatePlayer() {
+    if(player.invincibleTimer > 0) player.invincibleTimer--;
+
     let speed = player.speed;
     if(player.fastTimer > 0) {
       speed = player.maxSpeed;
@@ -382,7 +330,7 @@
     if(player.slowEnemyTimer > 0) player.slowEnemyTimer--;
 
     enemies.forEach(e => {
-      // Se inimigo está longe demais (>600), ele para
+      // Se inimigo está longe demais (>600), ele para de perseguir
       const distance = dist(e, player);
       if(distance > 600) return;
 
@@ -404,24 +352,24 @@
 
   // Verifica colisões e aplica efeitos
   function handleCollisions() {
-    // Jogador caixa
-    let px = player.x - player.size/2 - player.sizeIncrease/2;
-    let py = player.y - player.size/2 - player.sizeIncrease/2;
+    // Caixa do jogador (centralizado)
+    let px = player.x - (player.size + player.sizeIncrease) / 2;
+    let py = player.y - (player.size + player.sizeIncrease) / 2;
     let psize = player.size + player.sizeIncrease;
 
-    // Colete moedas
+    // Coleta moedas
     coins = coins.filter(c => {
       if(rectsCollide(px, py, psize, psize, c.x - c.size/2, c.y - c.size/2, c.size, c.size)) {
         player.coins++;
         player.sizeIncrease += 1; // cresce 1px por moeda
-        if(player.sizeIncrease > 40) player.sizeIncrease = 40; // max crescimento
+        if(player.sizeIncrease > 40) player.sizeIncrease = 40; // limite máximo
         updateUI();
         return false; // remove a moeda
       }
       return true;
     });
 
-    // Colete itens
+    // Coleta itens
     items = items.filter(item => {
       if(rectsCollide(px, py, psize, psize, item.x - item.size/2, item.y - item.size/2, item.size, item.size)) {
         if(item.type === 'life') {
@@ -432,7 +380,6 @@
         } else if(item.type === 'slowEnemy') {
           player.slowEnemyTimer = 300;
         } else if(item.type === 'extra') {
-          // Item extra que pode fazer algo a mais, por exemplo vida+2
           player.lives += 2;
           if(player.lives > player.maxLives) player.lives = player.maxLives;
         }
@@ -443,10 +390,13 @@
     });
 
     // Colisões com inimigos
-    enemies.forEach((e, idx) => {
+    enemies.forEach(e => {
+      if(player.invincibleTimer > 0) return; // sem dano se invencível
+
       if(e.type === 'enemyCommon') {
         if(rectsCollide(px, py, psize, psize, e.x - e.size/2, e.y - e.size/2, e.size, e.size)) {
           player.lives--;
+          player.invincibleTimer = INVINCIBLE_TIME;
           updateUI();
           if(player.lives <= 0) {
             gameOver = true;
@@ -456,6 +406,7 @@
       } else if(e.type === 'enemyMax') {
         if(rectsCollide(px, py, psize, psize, e.x - e.size/2, e.y - e.size/2, e.size, e.size)) {
           player.lives -= 5;
+          player.invincibleTimer = INVINCIBLE_TIME;
           updateUI();
           if(player.lives <= 0) {
             gameOver = true;
@@ -464,15 +415,20 @@
         }
       } else if(e.type === 'bee') {
         if(circleRectCollide(e.x, e.y, e.size/2, px, py, psize, psize)) {
-          e.hitsOnPlayer++;
-          if(e.hitsOnPlayer >= 3) {
-            gameOver = true;
-            deathReason = "Você foi morto por abelha!";
+          if(e.invincibleTimer <= 0) {
+            e.hitsOnPlayer++;
+            e.invincibleTimer = 30; // evita múltiplos toques instantâneos
+            if(e.hitsOnPlayer >= 3) {
+              gameOver = true;
+              deathReason = "Você foi morto por abelha!";
+            }
           }
         } else {
-          // Se afastou, resetar hits
+          // Resetar hits se afastou
+          // (Opcional: pode manter hits para 3 toques consecutivos, mas seu pedido indica resetar)
           e.hitsOnPlayer = 0;
         }
+        if(e.invincibleTimer > 0) e.invincibleTimer--;
       }
     });
   }
@@ -508,7 +464,7 @@
         case 'life': ctx.fillStyle = colors.life; break;
         case 'speed': ctx.fillStyle = colors.speed; break;
         case 'slowEnemy': ctx.fillStyle = colors.slowEnemy; break;
-        case 'extra': ctx.fillStyle = 'cyan'; break;
+        case 'extra': ctx.fillStyle = colors.extra; break;
         default: ctx.fillStyle = 'gray';
       }
       ctx.fillRect(sx - item.size/2, sy - item.size/2, item.size, item.size);
@@ -544,6 +500,25 @@
     restartBtn.style.display = 'block';
   }
 
+  // Função para reiniciar o jogo
+  function restartGame() {
+    gameOver = false;
+    deathReason = "";
+    player.x = 0;
+    player.y = 0;
+    player.lives = 2;
+    player.coins = 0;
+    player.sizeIncrease = 0;
+    player.fastTimer = 0;
+    player.slowEnemyTimer = 0;
+    player.beeHits = 0;
+    player.invincibleTimer = 0;
+    messageElem.style.display = 'none';
+    restartBtn.style.display = 'none';
+    initEntities();
+    updateUI();
+  }
+
   // Loop principal
   function gameLoop() {
     if(gameOver) {
@@ -551,7 +526,6 @@
       return;
     }
 
-    // Fundo branco
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
@@ -560,13 +534,6 @@
     updateEnemies();
 
     handleCollisions();
-
-    // Spawn entidades
-    spawnEnemiesCommon();
-    trySpawnEnemyMax();
-    trySpawnBee();
-    trySpawnCoin();
-    trySpawnItem();
 
     drawCoins();
     drawItems();

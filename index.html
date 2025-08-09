@@ -3,573 +3,596 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Jogo dos Quadrados</title>
+<title>Jogo dos Quadrados Completo</title>
 <style>
-  html, body {
+  body, html {
     margin:0; padding:0; overflow:hidden; background:#fff;
-    height:100%; width:100%;
-    user-select:none;
-    -webkit-user-select:none;
-    -webkit-tap-highlight-color: transparent;
     font-family: Arial, sans-serif;
+    user-select:none;
   }
-  #gameCanvas {
+  canvas {
     display:block;
-    background: #fff;
-    position: absolute;
-    top:0; left:0;
-    width: 100vw; height: 100vh;
+    background: white;
   }
-  #btnRestart {
-    position: fixed;
-    top: 10px; right: 10px;
-    font-size: 16px;
-    padding: 8px 12px;
-    background: #333; color: #fff;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    z-index: 100;
-  }
-  #info {
+  #ui {
     position: fixed;
     top: 10px; left: 10px;
+    color: #333;
+    font-weight: bold;
     font-size: 18px;
-    color: #222;
-    user-select:none;
-    z-index: 100;
+    z-index: 10;
   }
+  #message {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 36px;
+    font-weight: bold;
+    color: red;
+    background: rgba(255,255,255,0.9);
+    padding: 20px 40px;
+    border-radius: 15px;
+    display: none;
+    z-index: 20;
+  }
+  #restart-btn {
+    position: fixed;
+    top: calc(50% + 70px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    font-size: 20px;
+    border: none;
+    border-radius: 12px;
+    background: #333;
+    color: white;
+    cursor: pointer;
+    display: none;
+    z-index: 20;
+  }
+  /* Controles setas clicáveis para PS4 cursor */
   #controls {
     position: fixed;
-    bottom: 20px; left: 50%;
+    bottom: 20px;
+    left: 50%;
     transform: translateX(-50%);
-    width: 160px; height: 160px;
-    touch-action: none;
-    user-select:none;
-    z-index: 100;
+    display: flex;
+    width: 180px;
+    height: 140px;
+    user-select: none;
+    z-index: 15;
   }
-  .arrow {
-    width: 50px; height: 50px;
-    background: #ccc;
-    opacity: 0.7;
-    border-radius: 10px;
+  .btn-arrow {
     position: absolute;
-    user-select:none;
+    width: 60px; height: 60px;
+    background: #ccc;
+    border-radius: 12px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    text-align: center;
+    line-height: 60px;
+    font-size: 36px;
+    cursor: pointer;
+    user-select: none;
   }
-  .arrow:active {
-    background: #888;
+  .btn-arrow:active {
+    background: #aaa;
   }
-  #left { left: 0; top: 50%; transform: translateY(-50%); }
-  #right { right: 0; top: 50%; transform: translateY(-50%); }
-  #up { left: 50%; top: 0; transform: translateX(-50%); }
-  #down { left: 50%; bottom: 0; transform: translateX(-50%); }
+  #btn-up { top: 0; left: 60px; }
+  #btn-left { top: 70px; left: 0; }
+  #btn-down { top: 70px; left: 60px; }
+  #btn-right { top: 70px; left: 120px; }
 </style>
 </head>
 <body>
 
-<canvas id="gameCanvas"></canvas>
-<button id="btnRestart" style="display:none;">Reiniciar</button>
-<div id="info">Vidas: 2 | Moedas: 0</div>
+<div id="ui">Vidas: <span id="life-count">2</span> &nbsp; Moedas: <span id="coin-count">0</span></div>
+<div id="message"></div>
+<button id="restart-btn">Reiniciar</button>
+
+<canvas id="game"></canvas>
+
 <div id="controls">
-  <div class="arrow" id="up">&#9650;</div>
-  <div class="arrow" id="down">&#9660;</div>
-  <div class="arrow" id="left">&#9668;</div>
-  <div class="arrow" id="right">&#9658;</div>
+  <div class="btn-arrow" id="btn-up">↑</div>
+  <div class="btn-arrow" id="btn-left">←</div>
+  <div class="btn-arrow" id="btn-down">↓</div>
+  <div class="btn-arrow" id="btn-right">→</div>
 </div>
 
 <script>
 (() => {
-  const canvas = document.getElementById('gameCanvas');
+  const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+
+  // Ajusta tamanho da tela
   let WIDTH = window.innerWidth;
   let HEIGHT = window.innerHeight;
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
 
-  const btnRestart = document.getElementById('btnRestart');
-  const info = document.getElementById('info');
+  // UI elementos
+  const lifeCountElem = document.getElementById('life-count');
+  const coinCountElem = document.getElementById('coin-count');
+  const messageElem = document.getElementById('message');
+  const restartBtn = document.getElementById('restart-btn');
 
-  // Player
-  let player = {
+  // Controle de setas
+  const keys = { left:false, right:false, up:false, down:false };
+
+  // Botões para setas
+  const btnUp = document.getElementById('btn-up');
+  const btnDown = document.getElementById('btn-down');
+  const btnLeft = document.getElementById('btn-left');
+  const btnRight = document.getElementById('btn-right');
+
+  function setKey(key, val) { keys[key] = val; }
+  [btnUp, btnDown, btnLeft, btnRight].forEach(btn => {
+    btn.addEventListener('pointerdown', e => {
+      switch(btn.id) {
+        case 'btn-up': setKey('up', true); break;
+        case 'btn-down': setKey('down', true); break;
+        case 'btn-left': setKey('left', true); break;
+        case 'btn-right': setKey('right', true); break;
+      }
+    });
+    btn.addEventListener('pointerup', e => {
+      switch(btn.id) {
+        case 'btn-up': setKey('up', false); break;
+        case 'btn-down': setKey('down', false); break;
+        case 'btn-left': setKey('left', false); break;
+        case 'btn-right': setKey('right', false); break;
+      }
+    });
+    btn.addEventListener('pointerleave', e => {
+      switch(btn.id) {
+        case 'btn-up': setKey('up', false); break;
+        case 'btn-down': setKey('down', false); break;
+        case 'btn-left': setKey('left', false); break;
+        case 'btn-right': setKey('right', false); break;
+      }
+    });
+  });
+
+  // Também teclado
+  window.addEventListener('keydown', e => {
+    switch(e.key) {
+      case 'ArrowUp': keys.up = true; break;
+      case 'ArrowDown': keys.down = true; break;
+      case 'ArrowLeft': keys.left = true; break;
+      case 'ArrowRight': keys.right = true; break;
+    }
+  });
+  window.addEventListener('keyup', e => {
+    switch(e.key) {
+      case 'ArrowUp': keys.up = false; break;
+      case 'ArrowDown': keys.down = false; break;
+      case 'ArrowLeft': keys.left = false; break;
+      case 'ArrowRight': keys.right = false; break;
+    }
+  });
+
+  // Estado do jogo
+  let gameOver = false;
+  let deathReason = "";
+
+  // Jogador
+  const player = {
     x: 0,
     y: 0,
-    size: 40,
+    size: 30,
     speed: 3,
     maxSpeed: 6,
-    baseSpeed: 3,
     lives: 2,
     maxLives: 25,
     coins: 0,
-    speedTimer: 0,
-    slowEnemiesTimer: 0,
-    shield: false,
-    shieldTimer: 0,
-    sizeUpTimer: 0
+    sizeIncrease: 0,
+    fastTimer: 0,
+    slowEnemyTimer: 0,
+    beeHits: 0,  // toques da abelha
   };
 
-  // Map control
-  const spawnDistance = 500;
-  const stopChaseDistance = 600;
+  // Mundo infinito, pos player = centro, tudo deslocado em relação a ele
 
-  // Game state
-  let gameOverFlag = false;
-  let deathReason = '';
-  let lastSpawn = 0;
-
-  // Arrays
+  // Itens no mapa - cada item é {x,y,type}
   let coins = [];
-  let enemies = [];
-  let items = [];
+  let items = []; // verdes, roxos, laranja
+  let enemies = []; // azuis (3), rosa (max), abelha (círculo amarelo)
 
-  // Touch controls
-  let keys = {
-    left: false,
-    right: false,
-    up: false,
-    down: false
+  // Cores e tamanhos dos itens
+  const colors = {
+    player: 'red',
+    coin: 'yellow',
+    enemyCommon: 'blue',
+    enemyMax: 'pink',
+    bee: 'yellow',
+    life: 'green',
+    speed: 'purple',
+    slowEnemy: 'orange',
+  };
+  const sizes = {
+    player: 30,
+    coin: 15,
+    enemyCommon: 30,
+    enemyMax: 40,
+    bee: 25,
+    life: 20,
+    speed: 20,
+    slowEnemy: 20,
   };
 
-  // Bee (círculo amarelo) toca 3 vezes para matar
-  let beeTouches = 0;
+  // Atualiza UI
+  function updateUI() {
+    lifeCountElem.textContent = player.lives;
+    coinCountElem.textContent = player.coins;
+  }
 
-  // Enemy types
-  const ENEMY_TYPES = {
-    COMMON: 'common', // azul quadrado
-    MAX: 'max',       // rosa quadrado
-    BEE: 'bee'        // círculo amarelo
-  };
-
-  // Item types
-  const ITEM_TYPES = {
-    LIFE: 'life',          // verde
-    SPEED: 'speed',        // roxo
-    SLOW_ENEMIES: 'slow',  // laranja
-    SHIELD: 'shield',      // ciano (novo item)
-    SIZEUP: 'sizeup'       // rosa claro (novo item)
-  };
-
-  // Spawn intervals
-  const spawnInterval = 8000; // ms
-
-  // Movement vector
-  let moveX = 0;
-  let moveY = 0;
-
-  // Gamepad support
-  let gamepadIndex = null;
-
-  // Helper functions
-  function distance(a, b) {
+  // Função para distância
+  function dist(a, b) {
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
-  // Spawn functions
-  function spawnCoin() {
-    coins.push({
-      x: player.x + (Math.random() - 0.5) * 2000,
-      y: player.y + (Math.random() - 0.5) * 2000,
-      size: 20
-    });
+  // Spawn aleatório em volta do player, fora do raio minDist
+  function spawnAroundPlayer(minDist=500, maxDist=1000) {
+    const angle = Math.random() * 2 * Math.PI;
+    const distRand = minDist + Math.random()*(maxDist - minDist);
+    return {
+      x: player.x + Math.cos(angle)*distRand,
+      y: player.y + Math.sin(angle)*distRand,
+    };
   }
 
-  function spawnItem() {
-    const itemTypes = [ITEM_TYPES.LIFE, ITEM_TYPES.SPEED, ITEM_TYPES.SLOW_ENEMIES, ITEM_TYPES.SHIELD, ITEM_TYPES.SIZEUP];
-    const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-    items.push({
-      x: player.x + (Math.random() - 0.5) * 2000,
-      y: player.y + (Math.random() - 0.5) * 2000,
-      size: 30,
-      type
-    });
-  }
-
-  function spawnEnemy(type) {
-    // Spawn enemy at random position at least spawnDistance from player
-    let ex, ey;
-    do {
-      ex = player.x + (Math.random() - 0.5) * 2000;
-      ey = player.y + (Math.random() - 0.5) * 2000;
-    } while(distance({x: ex, y: ey}, player) < spawnDistance);
-
-    enemies.push({
-      x: ex,
-      y: ey,
-      size: 40,
-      type,
-      touches: 0,
-      baseSpeed: 2,
-      speed: 2,
-      slowTimer: 0
-    });
-  }
-
-  function spawnEnemiesBatch() {
-    for (let i = 0; i < 3; i++) {
-      spawnEnemy(ENEMY_TYPES.COMMON);
+  // Criar inimigos azuis (3)
+  function spawnEnemiesCommon() {
+    while(enemies.filter(e => e.type === 'enemyCommon').length < 3) {
+      const pos = spawnAroundPlayer(500, 900);
+      enemies.push({
+        ...pos,
+        type: 'enemyCommon',
+        size: sizes.enemyCommon,
+        speed: 2,
+      });
     }
-    // Chance to spawn rare enemies
-    if (Math.random() < 0.05) spawnEnemy(ENEMY_TYPES.MAX);
-    if (!enemies.some(e => e.type === ENEMY_TYPES.BEE) && Math.random() < 0.03) spawnEnemy(ENEMY_TYPES.BEE);
   }
 
-  // Initialize
-  function resetGame() {
+  // Criar inimigo rosa (max) raro (chance 0.01 por frame)
+  function trySpawnEnemyMax() {
+    if(enemies.some(e=>e.type === 'enemyMax')) return; // só 1
+    if(Math.random() < 0.001) {
+      const pos = spawnAroundPlayer(600, 1000);
+      enemies.push({
+        ...pos,
+        type: 'enemyMax',
+        size: sizes.enemyMax,
+        speed: 1.5,
+      });
+    }
+  }
+
+  // Criar abelha (círculo amarelo) só uma de cada vez
+  function trySpawnBee() {
+    if(enemies.some(e=>e.type === 'bee')) return;
+    if(Math.random() < 0.0008) {
+      const pos = spawnAroundPlayer(600, 1200);
+      enemies.push({
+        ...pos,
+        type: 'bee',
+        size: sizes.bee,
+        speed: 3,
+        hitsOnPlayer: 0, // contar toques
+      });
+    }
+  }
+
+  // Itens: vida (green), speed (purple), slowEnemy (orange)
+  function trySpawnItem() {
+    if(items.length > 20) return;
+    if(Math.random() < 0.02) {
+      const pos = spawnAroundPlayer(400, 1000);
+      const r = Math.random();
+      let type = 'life';
+      if(r < 0.4) type = 'life';
+      else if(r < 0.7) type = 'speed';
+      else if(r < 0.95) type = 'slowEnemy';
+      else type = 'extra'; // novo item que pode criar
+
+      items.push({
+        ...pos,
+        type,
+        size: sizes.life,
+      });
+    }
+  }
+
+  // Moedas amarelas aparecem diversas pelo mapa
+  function trySpawnCoin() {
+    if(coins.length > 40) return;
+    if(Math.random() < 0.05) {
+      const pos = spawnAroundPlayer(100, 1500);
+      coins.push({
+        ...pos,
+        size: sizes.coin,
+      });
+    }
+  }
+
+  // Reinicia jogo
+  function restartGame() {
+    gameOver = false;
+    deathReason = "";
     player.x = 0;
     player.y = 0;
     player.lives = 2;
-    player.speed = player.baseSpeed;
     player.coins = 0;
-    player.shield = false;
-    player.shieldTimer = 0;
-    player.size = 40;
-    player.sizeUpTimer = 0;
-    beeTouches = 0;
-    enemies = [];
-    coins = [];
-    items = [];
-    gameOverFlag = false;
-    deathReason = '';
-    lastSpawn = performance.now();
-    spawnEnemiesBatch();
-    for(let i=0; i<20; i++) spawnCoin();
-    for(let i=0; i<3; i++) spawnItem();
-    btnRestart.style.display = 'none';
-    updateInfo();
+    player.sizeIncrease = 0;
+    player.fastTimer = 0;
+    player.slowEnemyTimer = 0;
+    player.beeHits = 0;
+    enemies.length = 0;
+    coins.length = 0;
+    items.length = 0;
+    updateUI();
+    messageElem.style.display = 'none';
+    restartBtn.style.display = 'none';
   }
 
-  // Update info text
-  function updateInfo() {
-    info.textContent = `Vidas: ${player.lives} | Moedas: ${player.coins}`;
+  // Colisão entre retângulos
+  function rectsCollide(aX,aY,aW,aH,bX,bY,bW,bH) {
+    return aX < bX + bW && aX + aW > bX && aY < bY + bH && aY + aH > bY;
   }
 
-  // Game Over
-  function gameOver(reason) {
-    gameOverFlag = true;
-    deathReason = reason;
-    btnRestart.style.display = 'block';
+  // Colisão círculo e retângulo
+  function circleRectCollide(cx,cy,cr,x,y,w,h) {
+    // encontra o ponto mais próximo na caixa ao círculo
+  let closestX = Math.max(x, Math.min(cx, x + w));
+    let closestY = Math.max(y, Math.min(cy, y + h));
+
+    let dx = cx - closestX;
+    let dy = cy - closestY;
+
+    return (dx * dx + dy * dy) < (cr * cr);
   }
 
-  // Controls for touchscreen arrows
-  document.getElementById('left').addEventListener('touchstart', e => { keys.left = true; e.preventDefault(); });
-  document.getElementById('left').addEventListener('touchend', e => { keys.left = false; e.preventDefault(); });
-  document.getElementById('right').addEventListener('touchstart', e => { keys.right = true; e.preventDefault(); });
-  document.getElementById('right').addEventListener('touchend', e => { keys.right = false; e.preventDefault(); });
-  document.getElementById('up').addEventListener('touchstart', e => { keys.up = true; e.preventDefault(); });
-  document.getElementById('up').addEventListener('touchend', e => { keys.up = false; e.preventDefault(); });
-  document.getElementById('down').addEventListener('touchstart', e => { keys.down = true; e.preventDefault(); });
-  document.getElementById('down').addEventListener('touchend', e => { keys.down = false; e.preventDefault(); });
-
-  // Restart button
-  btnRestart.addEventListener('click', () => {
-    resetGame();
-  });
-
-  // Gamepad
-  window.addEventListener("gamepadconnected", function(e) {
-    gamepadIndex = e.gamepad.index;
-  });
-  window.addEventListener("gamepaddisconnected", function(e) {
-    if(gamepadIndex === e.gamepad.index) {
-      gamepadIndex = null;
-    }
-  });
-
-  // Main update loop
-  function update(delta) {
-    if(gameOverFlag) return;
-
-    // Update timers
-    if(player.speedTimer > 0) {
-      player.speedTimer -= delta;
-      if(player.speedTimer <= 0) {
-        player.speed = player.baseSpeed;
-      }
+  // Atualiza posição do jogador baseado nas teclas
+  function updatePlayer() {
+    let speed = player.speed;
+    if(player.fastTimer > 0) {
+      speed = player.maxSpeed;
+      player.fastTimer--;
     }
 
-    if(player.slowEnemiesTimer > 0) {
-      player.slowEnemiesTimer -= delta;
-      if(player.slowEnemiesTimer <= 0) {
-        enemies.forEach(e => e.speed = e.baseSpeed);
-      }
+    let dx = 0, dy = 0;
+    if(keys.left) dx -= speed;
+    if(keys.right) dx += speed;
+    if(keys.up) dy -= speed;
+    if(keys.down) dy += speed;
+
+    // Normaliza diagonal
+    if(dx !== 0 && dy !== 0) {
+      dx *= Math.SQRT1_2;
+      dy *= Math.SQRT1_2;
     }
 
-    if(player.shieldTimer > 0) {
-      player.shieldTimer -= delta;
-      if(player.shieldTimer <= 0) {
-        player.shield = false;
-      }
-    }
+    player.x += dx;
+    player.y += dy;
+  }
 
-    if(player.sizeUpTimer > 0) {
-      player.sizeUpTimer -= delta;
-      if(player.sizeUpTimer <= 0) {
-        player.size = 40;
-      }
-    }
+  // Atualiza inimigos perseguindo jogador (com distância 600px para seguir)
+  function updateEnemies() {
+    const slow = player.slowEnemyTimer > 0;
+    if(player.slowEnemyTimer > 0) player.slowEnemyTimer--;
 
-    // Update player velocity by keys
-    moveX = 0;
-    moveY = 0;
-    if(keys.left) moveX -= 1;
-    if(keys.right) moveX += 1;
-    if(keys.up) moveY -= 1;
-    if(keys.down) moveY += 1;
-
-    // Gamepad input
-    if(gamepadIndex !== null) {
-      const gp = navigator.getGamepads()[gamepadIndex];
-      if(gp) {
-        const deadzone = 0.2;
-        let axisX = gp.axes[0];
-        let axisY = gp.axes[1];
-        if(Math.abs(axisX) < deadzone) axisX = 0;
-        if(Math.abs(axisY) < deadzone) axisY = 0;
-        moveX = axisX;
-        moveY = axisY;
-      }
-    }
-
-    // Normalize movement
-    if(moveX !== 0 || moveY !== 0) {
-      const len = Math.hypot(moveX, moveY);
-      moveX /= len;
-      moveY /= len;
-    }
-
-    player.x += moveX * player.speed;
-    player.y += moveY * player.speed;
-
-    // Limitar mapa infinito não precisa (player pode andar livremente)
-
-    // Atualizar inimigos
     enemies.forEach(e => {
-      // Slow timer decrement
-      if(e.slowTimer > 0) {
-        e.slowTimer -= delta;
-        if(e.slowTimer <= 0) e.speed = e.baseSpeed;
-      }
+      // Se inimigo está longe demais (>600), ele para
+      const distance = dist(e, player);
+      if(distance > 600) return;
 
-      // Checar distância do player para perseguir
-      const dist = distance(player, e);
-      if(dist <= stopChaseDistance) {
-        // Perseguir o player
-        let dirX = player.x - e.x;
-        let dirY = player.y - e.y;
-        const len = Math.hypot(dirX, dirY);
-        if(len > 0) {
-          dirX /= len;
-          dirY /= len;
-          e.x += dirX * e.speed;
-          e.y += dirY * e.speed;
-        }
-      }
-      // Se afastar, inimigos param (não se movem)
+      let speed = e.speed;
+      if(slow) speed /= 2;
+
+      let dirX = player.x - e.x;
+      let dirY = player.y - e.y;
+      let len = Math.sqrt(dirX*dirX + dirY*dirY);
+      if(len === 0) return;
+
+      dirX /= len;
+      dirY /= len;
+
+      e.x += dirX * speed;
+      e.y += dirY * speed;
     });
+  }
 
-    // Colisões
+  // Verifica colisões e aplica efeitos
+  function handleCollisions() {
+    // Jogador caixa
+    let px = player.x - player.size/2 - player.sizeIncrease/2;
+    let py = player.y - player.size/2 - player.sizeIncrease/2;
+    let psize = player.size + player.sizeIncrease;
 
-    // Colisão com moedas
-    for(let i = coins.length - 1; i >= 0; i--) {
-      const c = coins[i];
-      if(distance(player, c) < (player.size/2 + c.size/2)) {
-        coins.splice(i, 1);
+    // Colete moedas
+    coins = coins.filter(c => {
+      if(rectsCollide(px, py, psize, psize, c.x - c.size/2, c.y - c.size/2, c.size, c.size)) {
         player.coins++;
-        player.size += 1;
-        player.sizeUpTimer = 8000; // dura 8s
-        if(player.size > 80) player.size = 80;
+        player.sizeIncrease += 1; // cresce 1px por moeda
+        if(player.sizeIncrease > 40) player.sizeIncrease = 40; // max crescimento
+        updateUI();
+        return false; // remove a moeda
       }
-    }
+      return true;
+    });
 
-    // Colisão com itens
-    for(let i = items.length - 1; i >= 0; i--) {
-      const it = items[i];
-      if(distance(player, it) < (player.size/2 + it.size/2)) {
-        switch(it.type) {
-          case ITEM_TYPES.LIFE:
-            player.lives++;
-            if(player.lives > player.maxLives) player.lives = player.maxLives;
-            break;
-          case ITEM_TYPES.SPEED:
-            player.speed = player.maxSpeed;
-            player.speedTimer = 8000;
-            break;
-          case ITEM_TYPES.SLOW_ENEMIES:
-            enemies.forEach(e => {
-              e.speed = 0.8;
-              e.slowTimer = 8000;
-            });
-            player.slowEnemiesTimer = 8000;
-            break;
-          case ITEM_TYPES.SHIELD:
-            player.shield = true;
-            player.shieldTimer = 10000;
-            break;
-          case ITEM_TYPES.SIZEUP:
-            player.size = 80;
-            player.sizeUpTimer = 8000;
-            break;
+    // Colete itens
+    items = items.filter(item => {
+      if(rectsCollide(px, py, psize, psize, item.x - item.size/2, item.y - item.size/2, item.size, item.size)) {
+        if(item.type === 'life') {
+          player.lives++;
+          if(player.lives > player.maxLives) player.lives = player.maxLives;
+        } else if(item.type === 'speed') {
+          player.fastTimer = 300; // 5 segundos a 60fps
+        } else if(item.type === 'slowEnemy') {
+          player.slowEnemyTimer = 300;
+        } else if(item.type === 'extra') {
+          // Item extra que pode fazer algo a mais, por exemplo vida+2
+          player.lives += 2;
+          if(player.lives > player.maxLives) player.lives = player.maxLives;
         }
-        items.splice(i, 1);
+        updateUI();
+        return false;
       }
-    }
+      return true;
+    });
 
-    // Colisão com inimigos
-    for(let e of enemies) {
-      const dist = distance(player, e);
-      if(dist < (player.size/2 + e.size/2)) {
-        if(e.type === ENEMY_TYPES.COMMON) {
-          // Quadrado azul - tira 1 vida
-          if(!player.shield) {
-            player.lives--;
-            if(player.lives <= 0) {
-              gameOver('Você foi morto por inimigo comum');
-            }
+    // Colisões com inimigos
+    enemies.forEach((e, idx) => {
+      if(e.type === 'enemyCommon') {
+        if(rectsCollide(px, py, psize, psize, e.x - e.size/2, e.y - e.size/2, e.size, e.size)) {
+          player.lives--;
+          updateUI();
+          if(player.lives <= 0) {
+            gameOver = true;
+            deathReason = "Você foi morto por inimigo comum!";
           }
-          // Para evitar perder várias vidas rapidinho, empurre inimigo pra longe
-          e.x += (e.x - player.x) * 50;
-          e.y += (e.y - player.y) * 50;
-        } else if(e.type === ENEMY_TYPES.MAX) {
-          // Quadrado rosa - tira 5 vidas
-          if(!player.shield) {
-            player.lives -= 5;
-            if(player.lives <= 0) {
-              gameOver('Você morreu por inimigo max');
-            }
+        }
+      } else if(e.type === 'enemyMax') {
+        if(rectsCollide(px, py, psize, psize, e.x - e.size/2, e.y - e.size/2, e.size, e.size)) {
+          player.lives -= 5;
+          updateUI();
+          if(player.lives <= 0) {
+            gameOver = true;
+            deathReason = "Você morreu por inimigo max!";
           }
-          e.x += (e.x - player.x) * 50;
-          e.y += (e.y - player.y) * 50;
-        } else if(e.type === ENEMY_TYPES.BEE) {
-          // Círculo amarelo - precisa encostar 3 vezes
-          if(!player.shield) {
-            beeTouches++;
-            if(beeTouches >= 3) {
-              gameOver('Você morreu por abelha');
-            }
+        }
+      } else if(e.type === 'bee') {
+        if(circleRectCollide(e.x, e.y, e.size/2, px, py, psize, psize)) {
+          e.hitsOnPlayer++;
+          if(e.hitsOnPlayer >= 3) {
+            gameOver = true;
+            deathReason = "Você foi morto por abelha!";
           }
-          // Empurra a abelha longe
-          e.x += (e.x - player.x) * 50;
-          e.y += (e.y - player.y) * 50;
+        } else {
+          // Se afastou, resetar hits
+          e.hitsOnPlayer = 0;
         }
       }
-    }
-
-    // Spawn coins and items if necessário para encher o mapa
-    if(coins.length < 30) spawnCoin();
-    if(items.length < 5 && Math.random() < 0.01) spawnItem();
-
-    // Spawn enemies se menos que 3 comuns
-    if(enemies.filter(e => e.type === ENEMY_TYPES.COMMON).length < 3) {
-      spawnEnemy(ENEMY_TYPES.COMMON);
-    }
-    // Spawn raros eventualmente
-    if(!enemies.some(e => e.type === ENEMY_TYPES.MAX) && Math.random() < 0.002) spawnEnemy(ENEMY_TYPES.MAX);
-    if(!enemies.some(e => e.type === ENEMY_TYPES.BEE) && Math.random() < 0.001) spawnEnemy(ENEMY_TYPES.BEE);
-
-    updateInfo();
+    });
   }
 
-  // Desenhar tudo
-  function draw() {
-    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+  // Desenha jogador
+  function drawPlayer() {
+    ctx.fillStyle = colors.player;
+    const size = player.size + player.sizeIncrease;
+    ctx.fillRect(
+      WIDTH/2 - size/2,
+      HEIGHT/2 - size/2,
+      size,
+      size
+    );
+  }
 
-    // Calcular offset para centralizar o player
-    const offsetX = player.x - WIDTH/2;
-    const offsetY = player.y - HEIGHT/2;
-
-    // Desenhar moedas (amarelas quadrados)
+  // Desenha moedas
+  function drawCoins() {
+    ctx.fillStyle = colors.coin;
     coins.forEach(c => {
-      const x = c.x - offsetX;
-      const y = c.y - offsetY;
-      ctx.fillStyle = 'yellow';
-      ctx.fillRect(x - c.size/2, y - c.size/2, c.size, c.size);
+      const sx = WIDTH/2 + (c.x - player.x);
+      const sy = HEIGHT/2 + (c.y - player.y);
+      ctx.fillRect(sx - c.size/2, sy - c.size/2, c.size, c.size);
     });
+  }
 
-    // Desenhar itens
-    items.forEach(it => {
-      const x = it.x - offsetX;
-      const y = it.y - offsetY;
-      switch(it.type) {
-        case ITEM_TYPES.LIFE:
-          ctx.fillStyle = 'green';
-          break;
-        case ITEM_TYPES.SPEED:
-          ctx.fillStyle = 'purple';
-          break;
-        case ITEM_TYPES.SLOW_ENEMIES:
-          ctx.fillStyle = 'orange';
-          break;
-        case ITEM_TYPES.SHIELD:
-          ctx.fillStyle = 'cyan';
-          break;
-        case ITEM_TYPES.SIZEUP:
-          ctx.fillStyle = '#ffb6c1'; // rosa claro
-          break;
+  // Desenha itens
+  function drawItems() {
+    items.forEach(item => {
+      const sx = WIDTH/2 + (item.x - player.x);
+      const sy = HEIGHT/2 + (item.y - player.y);
+      switch(item.type) {
+        case 'life': ctx.fillStyle = colors.life; break;
+        case 'speed': ctx.fillStyle = colors.speed; break;
+        case 'slowEnemy': ctx.fillStyle = colors.slowEnemy; break;
+        case 'extra': ctx.fillStyle = 'cyan'; break;
+        default: ctx.fillStyle = 'gray';
       }
-      ctx.fillRect(x - it.size/2, y - it.size/2, it.size, it.size);
+      ctx.fillRect(sx - item.size/2, sy - item.size/2, item.size, item.size);
     });
+  }
 
-    // Desenhar inimigos
+  // Desenha inimigos
+  function drawEnemies() {
     enemies.forEach(e => {
-      const x = e.x - offsetX;
-      const y = e.y - offsetY;
-      if(e.type === ENEMY_TYPES.COMMON) {
-        ctx.fillStyle = 'blue';
-        ctx.fillRect(x - e.size/2, y - e.size/2, e.size, e.size);
-      } else if(e.type === ENEMY_TYPES.MAX) {
-        ctx.fillStyle = 'pink';
-        ctx.fillRect(x - e.size/2, y - e.size/2, e.size, e.size);
-      } else if(e.type === ENEMY_TYPES.BEE) {
-        ctx.fillStyle = 'yellow';
+      const sx = WIDTH/2 + (e.x - player.x);
+      const sy = HEIGHT/2 + (e.y - player.y);
+
+      if(e.type === 'bee') {
+        ctx.fillStyle = colors.bee;
         ctx.beginPath();
-        ctx.arc(x, y, e.size/2, 0, Math.PI*2);
+        ctx.arc(sx, sy, e.size/2, 0, Math.PI*2);
         ctx.fill();
+      } else {
+        switch(e.type) {
+          case 'enemyCommon': ctx.fillStyle = colors.enemyCommon; break;
+          case 'enemyMax': ctx.fillStyle = colors.enemyMax; break;
+          default: ctx.fillStyle = 'black';
+        }
+        ctx.fillRect(sx - e.size/2, sy - e.size/2, e.size, e.size);
       }
     });
+  }
 
-    // Desenhar jogador (quadrado vermelho)
-    const px = WIDTH/2;
-    const py = HEIGHT/2;
-    ctx.fillStyle = player.shield ? 'cyan' : 'red';
-    ctx.fillRect(px - player.size/2, py - player.size/2, player.size, player.size);
-
-    // Se game over, mostrar texto centralizado menor e dentro da tela
-    if(gameOverFlag) {
-      ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillRect(0, HEIGHT/2 - 50, WIDTH, 100);
-      ctx.fillStyle = 'white';
-      ctx.font = '28px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(deathReason, WIDTH/2, HEIGHT/2);
-    }
+  // Mostra mensagem game over
+  function showGameOver() {
+    messageElem.textContent = deathReason;
+    messageElem.style.display = 'block';
+    restartBtn.style.display = 'block';
   }
 
   // Loop principal
-  let lastTime = 0;
-  function loop(timestamp=0) {
-    const delta = timestamp - lastTime;
-    lastTime = timestamp;
+  function gameLoop() {
+    if(gameOver) {
+      showGameOver();
+      return;
+    }
 
-    update(delta);
-    draw();
+    // Fundo branco
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    requestAnimationFrame(loop);
+    updatePlayer();
+    updateEnemies();
+
+    handleCollisions();
+
+    // Spawn entidades
+    spawnEnemiesCommon();
+    trySpawnEnemyMax();
+    trySpawnBee();
+    trySpawnCoin();
+    trySpawnItem();
+
+    drawCoins();
+    drawItems();
+    drawEnemies();
+    drawPlayer();
+
+    requestAnimationFrame(gameLoop);
   }
 
-  // Ajustar canvas tamanho na janela redimensionada
+  restartBtn.onclick = () => {
+    restartGame();
+    gameLoop();
+  };
+
+  // Inicializa
+  restartGame();
+  gameLoop();
+
+  // Ajustar canvas se redimensionar janela
   window.addEventListener('resize', () => {
     WIDTH = window.innerWidth;
     HEIGHT = window.innerHeight;
     canvas.width = WIDTH;
     canvas.height = HEIGHT;
   });
-
-  // Iniciar jogo
-  resetGame();
-  requestAnimationFrame(loop);
-
 })();
 </script>
-
 </body>
 </html>

@@ -1,1 +1,605 @@
-429: Too Many Requests
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Jogo dos Quadrados</title>
+<style>
+  html, body {
+    margin:0; padding:0; overflow:hidden;
+    background: white;
+    user-select:none;
+    font-family: Arial, sans-serif;
+  }
+  canvas {
+    display:block;
+    background: white;
+  }
+  #hud {
+    position: fixed;
+    top: 10px; left: 10px;
+    font-size: 18px;
+    background: rgba(255,255,255,0.85);
+    padding: 8px 12px;
+    border-radius: 6px;
+    z-index: 10;
+  }
+  #message {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 28px;
+    font-weight: bold;
+    color: red;
+    text-align: center;
+    z-index: 20;
+    user-select:none;
+  }
+  #restartBtn {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 14px 28px;
+    font-size: 22px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    display: none;
+    z-index: 30;
+    user-select:none;
+  }
+  #restartBtn:active {
+    background: #0056b3;
+  }
+  #controls {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 160px;
+    height: 160px;
+    z-index: 25;
+    user-select:none;
+    touch-action:none;
+  }
+  .btn-arrow {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 12px;
+    color: white;
+    font-size: 36px;
+    font-weight: bold;
+    line-height: 50px;
+    text-align: center;
+    user-select:none;
+  }
+  .btn-arrow:active {
+    background: rgba(0,0,0,0.6);
+  }
+  #up { top: 0; left: 55px; }
+  #down { bottom: 0; left: 55px; }
+  #left { top: 55px; left: 0; }
+  #right { top: 55px; right: 0; }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="hud"></div>
+<div id="message"></div>
+<button id="restartBtn">Reiniciar</button>
+
+<div id="controls">
+  <div id="up" class="btn-arrow">&#9650;</div>
+  <div id="down" class="btn-arrow">&#9660;</div>
+  <div id="left" class="btn-arrow">&#9664;</div>
+  <div id="right" class="btn-arrow">&#9654;</div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  let W, H;
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W;
+    canvas.height = H;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const basePlayerSize = 30;
+  const basePlayerSpeed = 3;
+  const baseEnemySpeed = 1.5;
+  const stopDistance = 600;
+  const minSpawnDistance = 500;
+  const maxLives = 25;
+
+  let gameOver = false;
+  let deathMessage = "";
+
+  const hudEl = document.getElementById('hud');
+  const messageEl = document.getElementById('message');
+  const restartBtn = document.getElementById('restartBtn');
+
+  // Controle teclado e toque
+  const keys = {};
+  window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+  window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+  const controls = {
+    up: document.getElementById('up'),
+    down: document.getElementById('down'),
+    left: document.getElementById('left'),
+    right: document.getElementById('right'),
+  };
+  for(const dir in controls){
+    controls[dir].addEventListener('touchstart', e => {
+      e.preventDefault();
+      keys[dir] = true;
+    }, {passive:false});
+    controls[dir].addEventListener('touchend', e => {
+      e.preventDefault();
+      keys[dir] = false;
+    }, {passive:false});
+    controls[dir].addEventListener('touchcancel', e => {
+      e.preventDefault();
+      keys[dir] = false;
+    }, {passive:false});
+  }
+
+  function dist(x1,y1,x2,y2){
+    return Math.hypot(x2 - x1, y2 - y1);
+  }
+
+  class Entity {
+    constructor(x,y,w,h){
+      this.x = x;
+      this.y = y;
+      this.w = w;
+      this.h = h;
+    }
+    draw(){
+      ctx.fillRect(this.x - camera.x, this.y - camera.y, this.w, this.h);
+    }
+    get centerX(){ return this.x + this.w/2 }
+    get centerY(){ return this.y + this.h/2 }
+  }
+
+  class Player extends Entity {
+    constructor(){
+      super(0,0,basePlayerSize,basePlayerSize);
+      this.speed = basePlayerSpeed;
+      this.lives = 2;
+      this.growAmount = 0;
+      this.speedTimer = 0;
+      this.speedMultiplier = 1;
+      this.invincibleTimer = 0;
+      this.coins = 0;
+    }
+    update(){
+      if(gameOver) return;
+      if(this.speedTimer > 0){
+        this.speedTimer--;
+        this.speedMultiplier = 2;
+      } else {
+        this.speedMultiplier = 1;
+      }
+      if(this.invincibleTimer > 0){
+        this.invincibleTimer--;
+      }
+
+      let moveX=0, moveY=0;
+      if(keys['w'] || keys['arrowup'] || keys['up']) moveY = -1;
+      if(keys['s'] || keys['arrowdown'] || keys['down']) moveY = 1;
+      if(keys['a'] || keys['arrowleft'] || keys['left']) moveX = -1;
+      if(keys['d'] || keys['arrowright'] || keys['right']) moveX = 1;
+
+      if(moveX !== 0 && moveY !== 0){
+        moveX *= Math.SQRT1_2;
+        moveY *= Math.SQRT1_2;
+      }
+
+      this.x += moveX * this.speed * this.speedMultiplier;
+      this.y += moveY * this.speed * this.speedMultiplier;
+
+      if(this.growAmount >= 1){
+        this.w = basePlayerSize + this.growAmount * 3;
+        this.h = basePlayerSize + this.growAmount * 3;
+      } else {
+        this.w = basePlayerSize;
+        this.h = basePlayerSize;
+      }
+      if(this.lives > maxLives) this.lives = maxLives;
+      if(this.lives < 0) this.lives = 0;
+    }
+    draw(){
+      ctx.fillStyle = this.invincibleTimer > 0 ? 'lightgray' : 'red';
+      super.draw();
+    }
+  }
+
+  class Enemy extends Entity {
+    constructor(x,y){
+      super(x,y,30,30);
+      this.speed = baseEnemySpeed;
+      this.slowTimer = 0;
+      this.damageCooldown = 0;
+    }
+    update(){
+      if(gameOver) return;
+      if(this.damageCooldown > 0) this.damageCooldown--;
+
+      let d = dist(this.centerX,this.centerY,player.centerX,player.centerY);
+      if(d > stopDistance) return;
+      if(this.slowTimer > 0){
+        this.slowTimer--;
+        this.speed = baseEnemySpeed * 0.4;
+      } else {
+        this.speed = baseEnemySpeed;
+      }
+      let dx = player.centerX - this.centerX;
+      let dy = player.centerY - this.centerY;
+      let len = Math.hypot(dx,dy);
+      if(len === 0) return;
+      this.x += (dx/len)*this.speed;
+      this.y += (dy/len)*this.speed;
+    }
+    draw(){
+      ctx.fillStyle = 'blue';
+      super.draw();
+    }
+  }
+
+  class EnemyMax extends Entity {
+    constructor(x,y){
+      super(x,y,40,40);
+      this.speed = baseEnemySpeed * 1.3;
+      this.slowTimer = 0;
+      this.damageCooldown = 0;
+    }
+    update(){
+      if(gameOver) return;
+      if(this.damageCooldown > 0) this.damageCooldown--;
+
+      let d = dist(this.centerX,this.centerY,player.centerX,player.centerY);
+      if(d > stopDistance) return;
+      if(this.slowTimer > 0){
+        this.slowTimer--;
+        this.speed = baseEnemySpeed * 0.5;
+      } else {
+        this.speed = baseEnemySpeed * 1.3;
+      }
+      let dx = player.centerX - this.centerX;
+      let dy = player.centerY - this.centerY;
+      let len = Math.hypot(dx,dy);
+      if(len === 0) return;
+      this.x += (dx/len)*this.speed;
+      this.y += (dy/len)*this.speed;
+    }
+    draw(){
+      ctx.fillStyle = 'pink';
+      super.draw();
+    }
+  }
+
+  class EnemyBee {
+    constructor(x,y){
+      this.x = x;
+      this.y = y;
+      this.radius = 20;
+      this.speed = baseEnemySpeed * 2;
+      this.slowTimer = 0;
+      this.touches = 0;
+    }
+    get centerX(){ return this.x }
+    get centerY(){ return this.y }
+    update(){
+      if(gameOver) return;
+      let d = dist(this.centerX,this.centerY,player.centerX,player.centerY);
+      if(d > stopDistance) return;
+      if(this.slowTimer > 0){
+        this.slowTimer--;
+        this.speed = baseEnemySpeed * 0.6;
+      } else {
+        this.speed = baseEnemySpeed * 2;
+      }
+      let dx = player.centerX - this.centerX;
+      let dy = player.centerY - this.centerY;
+      let len = Math.hypot(dx,dy);
+      if(len === 0) return;
+      this.x += (dx/len)*this.speed;
+      this.y += (dy/len)*this.speed;
+    }
+    draw(){
+      ctx.fillStyle = 'yellow';
+      ctx.beginPath();
+      ctx.arc(this.x - camera.x, this.y - camera.y, this.radius, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  class Item extends Entity {
+    constructor(x,y,type){
+      super(x,y,25,25);
+      this.type = type; // 'coin', 'life', 'speed', 'slowEnemies', 'invincible'
+      this.active = false; // para efeito slowEnemies
+    }
+    draw(){
+      switch(this.type){
+        case 'coin': ctx.fillStyle = 'yellow'; break;
+        case 'life': ctx.fillStyle = 'green'; break;
+        case 'speed': ctx.fillStyle = 'purple'; break;
+        case 'slowEnemies': ctx.fillStyle = 'orange'; break;
+        case 'invincible': ctx.fillStyle = 'gray'; break;
+      }
+      super.draw();
+    }
+  }
+
+  // Câmera segue jogador
+  const camera = {x:0, y:0};
+  function updateCamera(){
+    camera.x = player.x + player.w/2 - W/2;
+    camera.y = player.y + player.h/2 - H/2;
+  }
+
+  const player = new Player();
+  let enemies = [];
+  let enemyMaxs = [];
+  let enemyBee = null;
+  let items = [];
+
+  let lastSpawnItemTime = 0;
+
+  function randomPosAwayFromPlayer(minDist = minSpawnDistance, maxDist = minDist + 400){
+    let angle = Math.random()*Math.PI*2;
+    let distRand = minDist + Math.random()*(maxDist - minDist);
+    let x = player.x + player.w/2 + Math.cos(angle)*distRand;
+    let y = player.y + player.h/2 + Math.sin(angle)*distRand;
+    return {x,y};
+  }
+
+  function randomPosNearPlayer(minDist = 50, maxDist = 150){
+    let angle = Math.random()*Math.PI*2;
+    let distRand = minDist + Math.random()*(maxDist - minDist);
+    let x = player.x + player.w/2 + Math.cos(angle)*distRand;
+    let y = player.y + player.h/2 + Math.sin(angle)*distRand;
+    return {x,y};
+  }
+
+  function spawnInitial(){
+    enemies = [];
+    enemyMaxs = [];
+    enemyBee = null;
+    items = [];
+
+    for(let i=0; i<3; i++){
+      let pos = randomPosAwayFromPlayer();
+      enemies.push(new Enemy(pos.x,pos.y));
+    }
+    if(Math.random() < 0.1){
+      let posMax = randomPosAwayFromPlayer();
+      enemyMaxs.push(new EnemyMax(posMax.x,posMax.y));
+    }
+
+    // Muitas moedas e itens iniciais espalhados num raio grande
+    for(let i=0; i<50; i++){
+      let angle = Math.random()*Math.PI*2;
+      let distRand = 100 + Math.random()*900;
+      let x = player.x + player.w/2 + Math.cos(angle)*distRand;
+      let y = player.y + player.h/2 + Math.sin(angle)*distRand;
+
+      // Chance maior para moedas, menos para itens
+      let r = Math.random();
+      let type = 'coin';
+      if(r < 0.7) type = 'coin';
+      else if(r < 0.85) type = 'life';
+      else if(r < 0.95) type = 'speed';
+      else if(r < 0.98) type = 'slowEnemies';
+      else type = 'invincible';
+
+      items.push(new Item(x,y,type));
+    }
+  }
+
+  function rectsCollide(a,b){
+    return a.x < b.x + b.w &&
+           a.x + a.w > b.x &&
+           a.y < b.y + b.h &&
+           a.y + a.h > b.y;
+  }
+
+  function circleRectCollide(circle, rect){
+    let closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+    let closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+    let distX = circle.x - closestX;
+    let distY = circle.y - closestY;
+    return (distX*distX + distY*distY) < (circle.radius * circle.radius);
+  }
+
+  function trySpawnBee(){
+    if(gameOver) return;
+    if(enemyBee) return; // só 1 abelha por vez
+    if(Math.random() < 0.0007){ // spawn raro
+      let pos = randomPosAwayFromPlayer();
+      enemyBee = new EnemyBee(pos.x,pos.y);
+      enemyBee.touches = 0;
+      enemyBee.slowTimer = 0;
+    }
+  }
+
+  // Spawn itens ou moedas a cada 8s, com chance maior que antes
+  function trySpawnItemTimed(timeNow){
+    if(gameOver) return;
+    if(timeNow - lastSpawnItemTime > 8000){
+      lastSpawnItemTime = timeNow;
+      // chance mais alta para moedas e itens
+      let r = Math.random();
+      let type = 'coin';
+      if(r < 0.5) type = 'coin';       // 50%
+      else if(r < 0.7) type = 'life';  // 20%
+      else if(r < 0.85) type = 'speed';// 15%
+      else if(r < 0.95) type = 'slowEnemies'; // 10%
+      else type = 'invincible';         // 5%
+
+      let pos = randomPosNearPlayer();
+      items.push(new Item(pos.x,pos.y,type));
+    }
+  }
+
+  function tryDamagePlayerEnemy(enemy, damage, deathMsg){
+    if(player.invincibleTimer > 0) return;
+    if(enemy.damageCooldown <= 0){
+      player.lives -= damage;
+      enemy.damageCooldown = 60;
+      if(player.lives <= 0){
+        player.lives = 0;
+        gameOver = true;
+        deathMessage = deathMsg;
+      }
+    }
+  }
+
+  function update(timeNow){
+    if(gameOver) return;
+
+    player.update();
+
+    enemies.forEach(e => e.update());
+    enemyMaxs.forEach(em => em.update());
+    if(enemyBee) enemyBee.update();
+
+    // Checar colisões player-itens
+    items = items.filter(i => {
+      if(rectsCollide(player,i)){
+        switch(i.type){
+          case 'coin':
+            player.coins++;
+            player.growAmount += 0.3;
+            break;
+          case 'life':
+            player.lives = Math.min(maxLives, player.lives + 1);
+            break;
+          case 'speed':
+            player.speedTimer = 300; // 5 segundos de velocidade extra
+            break;
+          case 'slowEnemies':
+            i.active = true; // efeito ativo para lentidão inimigos
+            break;
+          case 'invincible':
+            player.invincibleTimer = 300; // 5 segundos invencível
+            break;
+        }
+        return false;
+      }
+      return true;
+    });
+
+    // Lentidão inimigos se item ativo
+    const slowEffectActive = items.some(i => i.type === 'slowEnemies' && i.active);
+
+    if(slowEffectActive){
+      enemies.forEach(e => e.slowTimer = 180);
+      enemyMaxs.forEach(em => em.slowTimer = 180);
+      if(enemyBee) enemyBee.slowTimer = 180;
+    }
+
+    // Colisões com inimigos azuis - perdem 1 vida
+    enemies.forEach(e => {
+      if(rectsCollide(player,e)){
+        tryDamagePlayerEnemy(e, 1, "Você foi morto por inimigo comum");
+      }
+    });
+
+    // Colisões com inimigo rosa - perdem 5 vidas
+    enemyMaxs.forEach(em => {
+      if(rectsCollide(player,em)){
+        tryDamagePlayerEnemy(em, 5, "Você morreu por inimigo max");
+      }
+    });
+
+    // Colisões com abelha - 3 toques e morre
+    if(enemyBee){
+      if(circleRectCollide(enemyBee, player)){
+        enemyBee.touches++;
+        if(enemyBee.touches >= 3){
+          gameOver = true;
+          deathMessage = "Você morreu por inimigo abelha";
+        }
+      }
+    }
+
+    trySpawnBee();
+    trySpawnItemTimed(timeNow);
+
+    updateCamera();
+  }
+
+  function draw(){
+    ctx.clearRect(0, 0, W, H);
+
+    player.draw();
+    enemies.forEach(e => e.draw());
+    enemyMaxs.forEach(em => em.draw());
+    if(enemyBee) enemyBee.draw();
+    items.forEach(i => i.draw());
+
+    hudEl.textContent = `Vidas: ${player.lives} | Moedas: ${player.coins} | Tamanho: ${player.w.toFixed(0)}`;
+
+    if(gameOver){
+      restartBtn.style.display = 'block';
+      messageEl.textContent = deathMessage;
+    } else {
+      restartBtn.style.display = 'none';
+      messageEl.textContent = '';
+    }
+  }
+
+  function resetGame(){
+    player.x = 0;
+    player.y = 0;
+    player.w = basePlayerSize;
+    player.h = basePlayerSize;
+    player.lives = 2;
+    player.growAmount = 0;
+    player.speedTimer = 0;
+    player.invincibleTimer = 0;
+    player.speedMultiplier = 1;
+    player.coins = 0;
+    enemies = [];
+    enemyMaxs = [];
+    enemyBee = null;
+    items = [];
+    gameOver = false;
+    deathMessage = "";
+    lastSpawnItemTime = performance.now();
+    spawnInitial();
+  }
+
+  restartBtn.addEventListener('click', () => {
+    resetGame();
+  });
+
+  function gameLoop(time){
+    update(time);
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  resetGame();
+  requestAnimationFrame(gameLoop);
+
+})();
+</script>
+
+</body>
+</html>

@@ -1,370 +1,366 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Jogo dos Quadrados Completo</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Jogo dos Quadrados — Versão Final</title>
 <style>
-  body, html {
-    margin:0; padding:0; overflow:hidden; background:#fff;
-    font-family: Arial, sans-serif;
+  html,body {
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:#fff; font-family: Arial, Helvetica, sans-serif;
     user-select:none;
   }
-  canvas {
-    display:block;
-    background: white;
-  }
+  canvas { display:block; background:#fff; }
   #ui {
-    position: fixed;
-    top: 10px; left: 10px;
-    color: #333;
-    font-weight: bold;
-    font-size: 18px;
-    z-index: 10;
+    position:fixed; left:12px; top:10px; z-index:20;
+    font-weight:bold; color:#222;
   }
   #message {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 36px;
-    font-weight: bold;
-    color: red;
-    background: rgba(255,255,255,0.9);
-    padding: 20px 40px;
-    border-radius: 15px;
-    display: none;
-    z-index: 20;
-    max-width: 90vw;
-    text-align: center;
+    position:fixed; left:50%; top:50%;
+    transform:translate(-50%, -50%);
+    z-index:30; background:rgba(255,255,255,0.96);
+    padding:18px 26px; border-radius:12px;
+    font-size:22px; color:#b00;
+    display:none; max-width:90vw; text-align:center;
   }
   #restart-btn {
-    position: fixed;
-    top: calc(50% + 70px);
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 12px 24px;
-    font-size: 20px;
-    border: none;
-    border-radius: 12px;
-    background: #333;
-    color: white;
-    cursor: pointer;
-    display: none;
-    z-index: 20;
+    position:fixed; left:50%; top:calc(50% + 80px);
+    transform:translateX(-50%);
+    z-index:31; padding:12px 20px;
+    border-radius:10px; border:0;
+    background:#222; color:#fff;
+    font-size:18px; cursor:pointer;
+    display:none;
   }
-  /* Controles setas clicáveis para PS4 cursor */
+  /* touch controls */
   #controls {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    width: 180px;
-    height: 140px;
-    user-select: none;
-    z-index: 15;
+    position:fixed; left:50%; bottom:18px;
+    transform:translateX(-50%);
+    width:180px; height:140px; z-index:25;
   }
   .btn-arrow {
-    position: absolute;
-    width: 60px; height: 60px;
-    background: #ccc;
-    border-radius: 12px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-    text-align: center;
-    line-height: 60px;
-    font-size: 36px;
-    cursor: pointer;
-    user-select: none;
+    position:absolute;
+    width:60px; height:60px;
+    border-radius:12px;
+    background:#ddd;
+    box-shadow:0 2px 6px rgba(0,0,0,.15);
+    text-align:center; line-height:60px;
+    font-size:30px; cursor:pointer;
+    user-select:none;
   }
   .btn-arrow:active {
-    background: #aaa;
+    background:#bbb;
   }
-  #btn-up { top: 0; left: 60px; }
-  #btn-left { top: 70px; left: 0; }
-  #btn-down { top: 70px; left: 60px; }
-  #btn-right { top: 70px; left: 120px; }
+  #btn-up { left:60px; top:0 }
+  #btn-left { left:0; top:70px }
+  #btn-down { left:60px; top:70px }
+  #btn-right { left:120px; top:70px }
 </style>
 </head>
 <body>
+  <div id="ui">
+    Vidas: <span id="life-count">2</span> &nbsp;&nbsp;
+    Moedas: <span id="coin-count">0</span>
+  </div>
+  <div id="message"></div>
+  <button id="restart-btn">Reiniciar</button>
 
-<div id="ui">Vidas: <span id="life-count">2</span> &nbsp; Moedas: <span id="coin-count">0</span></div>
-<div id="message"></div>
-<button id="restart-btn">Reiniciar</button>
+  <canvas id="game"></canvas>
 
-<canvas id="game"></canvas>
-
-<div id="controls">
-  <div class="btn-arrow" id="btn-up">↑</div>
-  <div class="btn-arrow" id="btn-left">←</div>
-  <div class="btn-arrow" id="btn-down">↓</div>
-  <div class="btn-arrow" id="btn-right">→</div>
-</div>
+  <div id="controls">
+    <div class="btn-arrow" id="btn-up">↑</div>
+    <div class="btn-arrow" id="btn-left">←</div>
+    <div class="btn-arrow" id="btn-down">↓</div>
+    <div class="btn-arrow" id="btn-right">→</div>
+  </div>
 
 <script>
 (() => {
+  // --- Setup Canvas ---
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+  let WIDTH = window.innerWidth, HEIGHT = window.innerHeight;
+  canvas.width = WIDTH; canvas.height = HEIGHT;
 
-  let WIDTH = window.innerWidth;
-  let HEIGHT = window.innerHeight;
-  canvas.width = WIDTH;
-  canvas.height = HEIGHT;
-
+  // --- UI Elements ---
   const lifeCountElem = document.getElementById('life-count');
   const coinCountElem = document.getElementById('coin-count');
   const messageElem = document.getElementById('message');
   const restartBtn = document.getElementById('restart-btn');
 
-  const keys = { left:false, right:false, up:false, down:false };
+  // --- Game Configurations ---
+  const ITEM_RESPAWN_INTERVAL_MS = 4000; // 4 segundos
+  const ITEM_MIN_DIST = 500; // distância minima do jogador
+  const ENEMY_STOP_DISTANCE = 600; // inimigos param de perseguir se > 600px
+  const PLAYER_MAX_LIVES = 25;
+  const BEE_HITS_TO_KILL = 3;
+  const DAMAGE_COOLDOWN_MS = 1000; // 1s cooldown por inimigo
 
-  // Botões setas para toque
-  ['up', 'down', 'left', 'right'].forEach(dir => {
-    const btn = document.getElementById('btn-' + dir);
-    btn.addEventListener('pointerdown', () => { keys[dir] = true; });
-    btn.addEventListener('pointerup', () => { keys[dir] = false; });
-    btn.addEventListener('pointerleave', () => { keys[dir] = false; });
-  });
+  // Apito configurações
+  const WHISTLE_COOLDOWN_MS = 10000; // 10 segundos de cooldown
+  const WHISTLE_FREEZE_MS = 4000;    // 4 segundos congelados
+
+  // --- Colors & Sizes ---
+  const COLORS = {
+    player: '#d11',
+    coin: '#ffdc4d',
+    enemyCommon: '#2b6cff',
+    enemyMax: '#ff65b2',
+    bee: '#ffc34d',
+    life: '#2ecc71',
+    speed: '#8b5cf6',
+    slowEnemy:'#ff8a3d',
+    shield: '#4ce0e6',
+    extra:'#800080',      // roxo para extra
+    grayItem: '#888888', // cinza para item extra
+    cyanItem: '#00bcd4', // ciano para item extra
+    whistleReady: '#ffdc4d',  // amarelo para triângulo apito
+    whistleCooldown: '#888888' // cinza quando em cooldown
+  };
+
+  const SIZES = {
+    player: 36,
+    coin: 18,
+    enemyCommon: 36,
+    enemyMax: 48,
+    bee: 26,
+    life: 22,
+    speed: 22,
+    slowEnemy:22,
+    shield:26,
+    extra:22
+  };
+
+  // --- Game State ---
+  let gameOver = false;
+  let deathReason = '';
+
+  // Controle de teclas e touch
+  const keys = { left:false, right:false, up:false, down:false };
+  const btnUp = document.getElementById('btn-up');
+  const btnDown = document.getElementById('btn-down');
+  const btnLeft = document.getElementById('btn-left');
+  const btnRight = document.getElementById('btn-right');
+
+  function bindBtn(btn, dir) {
+    btn.addEventListener('pointerdown', e => { keys[dir]=true; e.preventDefault(); });
+    btn.addEventListener('pointerup', e => { keys[dir]=false; e.preventDefault(); });
+    btn.addEventListener('pointerleave', e => { keys[dir]=false; e.preventDefault(); });
+    btn.addEventListener('touchcancel', e => { keys[dir]=false; e.preventDefault(); });
+  }
+  bindBtn(btnUp,'up'); bindBtn(btnDown,'down'); bindBtn(btnLeft,'left'); bindBtn(btnRight,'right');
 
   window.addEventListener('keydown', e => {
-    switch(e.key) {
-      case 'ArrowUp': keys.up = true; break;
-      case 'ArrowDown': keys.down = true; break;
-      case 'ArrowLeft': keys.left = true; break;
-      case 'ArrowRight': keys.right = true; break;
-    }
+    if(e.key === 'ArrowUp') keys.up = true;
+    if(e.key === 'ArrowDown') keys.down = true;
+    if(e.key === 'ArrowLeft') keys.left = true;
+    if(e.key === 'ArrowRight') keys.right = true;
   });
   window.addEventListener('keyup', e => {
-    switch(e.key) {
-      case 'ArrowUp': keys.up = false; break;
-      case 'ArrowDown': keys.down = false; break;
-      case 'ArrowLeft': keys.left = false; break;
-      case 'ArrowRight': keys.right = false; break;
-    }
+    if(e.key === 'ArrowUp') keys.up = false;
+    if(e.key === 'ArrowDown') keys.down = false;
+    if(e.key === 'ArrowLeft') keys.left = false;
+    if(e.key === 'ArrowRight') keys.right = false;
   });
 
-  let gameOver = false;
-  let deathReason = "";
+  // Mouse drag / pointer control: ao arrastar/clicar no canvas o jogador se move na direção do cursor
+  let pointerActive = false;
+  canvas.addEventListener('pointerdown', (e) => { pointerActive = true; handlePointerMove(e); canvas.style.cursor='pointer'; });
+  canvas.addEventListener('pointerup', (e)=>{ pointerActive = false; resetKeys(); canvas.style.cursor='default'; });
+  canvas.addEventListener('pointercancel', ()=>{ pointerActive=false; resetKeys(); canvas.style.cursor='default' });
+  canvas.addEventListener('mouseleave', ()=>{ pointerActive=false; resetKeys(); canvas.style.cursor='default' });
+  canvas.addEventListener('pointermove', (e) => { if(pointerActive) handlePointerMove(e); });
 
+  function resetKeys(){
+    keys.left=false; keys.right=false; keys.up=false; keys.down=false;
+  }
+  function handlePointerMove(e){
+    // calcula direção do centro (player) para o ponteiro
+    const cx = WIDTH/2, cy = HEIGHT/2;
+    const dx = e.clientX - cx, dy = e.clientY - cy;
+    const deadZone = 10; // zona morta para não oscilar
+    keys.left = dx < -deadZone;
+    keys.right = dx > deadZone;
+    keys.up = dy < -deadZone;
+    keys.down = dy > deadZone;
+  }
+
+  // --- Mundo ---
   const player = {
-    x: 0,
-    y: 0,
-    size: 30,
+    x: 0, y: 0,
+    size: SIZES.player,
     speed: 3,
     maxSpeed: 6,
     lives: 2,
-    maxLives: 25,
     coins: 0,
     sizeIncrease: 0,
     fastTimer: 0,
     slowEnemyTimer: 0,
-    shieldTimer: 0,
-    beeHits: 0,
+    shieldTimer: 0
   };
 
-  let coins = [];
-  let items = [];
-  let enemies = [];
+  let coins = []; // {x,y,size}
+  let items = []; // {x,y,size,type}
+  let enemies = []; // {x,y,size,type,speed,lastHitTime,hitsOnPlayer,lastDamageTime}
 
-  const colors = {
-    player: 'red',
-    coin: 'yellow',
-    enemyCommon: 'blue',
-    enemyMax: 'pink',
-    bee: 'yellow',
-    life: 'green',
-    speed: 'purple',
-    slowEnemy: 'orange',
-    shield: 'cyan',
-  };
+  // Para controle do apito
+  let whistleLastUse = 0;
+  let enemiesFrozenUntil = 0;
 
-  const sizes = {
-    player: 30,
-    coin: 15,
-    enemyCommon: 30,
-    enemyMax: 40,
-    bee: 25,
-    life: 20,
-    speed: 20,
-    slowEnemy: 20,
-    shield: 40,
-  };
+  // --- Utilitários ---
+  function randAnglePos(minDist, maxDist) {
+    const angle = Math.random()*Math.PI*2;
+    const radius = minDist + Math.random()*(maxDist - minDist);
+    return {
+      x: player.x + Math.cos(angle)*radius,
+      y: player.y + Math.sin(angle)*radius
+    };
+  }
+  function distance(ax, ay, bx, by){
+    return Math.hypot(ax - bx, ay - by);
+  }
 
-  function updateUI() {
+  // --- UI update ---
+  function updateUI(){
     lifeCountElem.textContent = player.lives;
     coinCountElem.textContent = player.coins;
   }
 
-  function dist(a, b) {
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  }
-
-  function spawnAroundPlayer(minDist=500, maxDist=1000) {
-    const angle = Math.random() * 2 * Math.PI;
-    const distRand = minDist + Math.random()*(maxDist - minDist);
-    return {
-      x: player.x + Math.cos(angle) * distRand,
-      y: player.y + Math.sin(angle) * distRand
-    };
-  }
-
-  // Spawn inicial
-  function spawnInitial() {
+  // --- Spawn inicial ---
+  function spawnInitial(){
     coins = [];
     items = [];
     enemies = [];
-
-    // Spawn 50 moedas espalhadas
-    for(let i=0; i<50; i++) {
-      let pos = spawnAroundPlayer(500, 1500);
-      coins.push({x: pos.x, y: pos.y, size: sizes.coin});
-    }
-
-    // Spawn 3 inimigos comuns
-    for(let i=0; i<3; i++) {
-      let pos = spawnAroundPlayer(500, 1500);
-      enemies.push({
-        x: pos.x, y: pos.y,
-        size: sizes.enemyCommon,
-        speed: 1.5,
-        type: 'enemyCommon',
-        lastHitTime: 0,
-      });
-    }
-
-    // Spawn inimigo max rosa (raro)
-    if(Math.random() < 0.2) {
-      let pos = spawnAroundPlayer(500, 1500);
-      enemies.push({
-        x: pos.x, y: pos.y,
-        size: sizes.enemyMax,
-        speed: 1,
-        type: 'enemyMax',
-        lastHitTime: 0,
-      });
-    }
-
-    // Spawn abelha (circulo amarelo) - só 1 abelha por vez
-    if(Math.random() < 0.3) {
-      let pos = spawnAroundPlayer(500, 1500);
-      enemies.push({
-        x: pos.x, y: pos.y,
-        size: sizes.bee,
-        speed: 2,
-        type: 'bee',
-        hitsOnPlayer: 0,
-        lastHitTime: 0,
-      });
-    }
-
-    // Spawn itens (verde, roxo, laranja, ciano escudo)
-    const itemTypes = ['life', 'speed', 'slowEnemy', 'shieldExtra'];
-    for(let i=0; i<10; i++) {
-      let pos = spawnAroundPlayer(500, 1500);
-      let type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-      items.push({
-        x: pos.x,
-        y: pos.y,
-        size: sizes[type],
-        type,
-      });
-    }
-
-    // Reset player estado
-    player.x = 0;
-    player.y = 0;
-    player.lives = 5;
+    player.x = 0; player.y = 0;
+    player.lives = 2;
     player.coins = 0;
     player.sizeIncrease = 0;
     player.fastTimer = 0;
     player.slowEnemyTimer = 0;
     player.shieldTimer = 0;
-    player.beeHits = 0;
+    whistleLastUse = 0;
+    enemiesFrozenUntil = 0;
+    // Moedas
+    for(let i=0; i<50; i++){
+      const p = randAnglePos(300,1400);
+      coins.push({x: p.x, y: p.y, size: SIZES.coin});
+    }
+    // Itens
+    for(let i=0; i<8; i++){
+      const p = randAnglePos(400,1400);
+      items.push({x: p.x, y: p.y, size: SIZES.life, type: chooseItemType()});
+    }
+    // Inimigos comuns (3 azuis)
+    for(let i=0; i<3; i++){
+      const p = randAnglePos(600,1200);
+      enemies.push({x: p.x, y: p.y, size: SIZES.enemyCommon, type: 'enemyCommon', speed: 1.6, lastHitTime: 0, hitsOnPlayer: 0, lastDamageTime: 0});
+    }
+    // 1 inimigo rosa (raro) com 60% chance
+    if(Math.random() < 0.6){
+      const p = randAnglePos(600,1200);
+      enemies.push({x: p.x, y: p.y, size: SIZES.enemyMax, type: 'enemyMax', speed: 1.2, lastHitTime: 0, hitsOnPlayer: 0, lastDamageTime: 0});
+    }
+    // 1 abelha (apenas 1 no mapa)
+    if(Math.random() < 0.9 && !enemies.some(e=>e.type === 'bee')){
+      const p = randAnglePos(700,1400);
+      enemies.push({x: p.x, y: p.y, size: SIZES.bee, type: 'bee', speed: 2.6, hitsOnPlayer: 0, lastHitTime: 0, lastDamageTime: 0});
+    }
     gameOver = false;
-    deathReason = "";
+    deathReason = '';
     updateUI();
   }
 
-  function rectsCollide(ax, ay, aw, ah, bx, by, bw, bh) {
+  // --- Escolha tipo de item ---
+  function chooseItemType(){
+    const r = Math.random();
+    if(r < 0.3) return 'life';         // 30% verde
+    if(r < 0.55) return 'coinpack';    // 25% amarelo (moedas)
+    if(r < 0.75) return 'speed';       // 20% roxo
+    if(r < 0.90) return 'slowEnemy';   // 15% laranja
+    if(r < 0.97) return 'shield';      // 7% ciano
+    return 'extra';                    // 3% cinza
+  }
+
+  // --- Spawn periódico de itens ---
+  function spawnItemsPeriodically(){
+    const coinCount = 1 + Math.floor(Math.random()*3);
+    for(let i=0; i<coinCount; i++){
+      const p = randAnglePos(ITEM_MIN_DIST, 1600);
+      coins.push({x: p.x, y: p.y, size: SIZES.coin});
+    }
+    if(Math.random() < 0.85){
+      const p = randAnglePos(ITEM_MIN_DIST, 1600);
+      items.push({x: p.x, y: p.y, size: SIZES.life, type: chooseItemType()});
+    }
+    if(Math.random() < 0.08){
+      const p = randAnglePos(ITEM_MIN_DIST, 1600);
+      items.push({x: p.x, y: p.y, size: SIZES.shield, type: 'shield'});
+    }
+  }
+
+  // --- Colisões ---
+  function rectsCollide(ax,ay,aw,ah,bx,by,bw,bh){
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
   }
-
-  function circleRectCollide(cx, cy, cr, rx, ry, rw, rh) {
-    let closestX = Math.max(rx, Math.min(cx, rx + rw));
-    let closestY = Math.max(ry, Math.min(cy, ry + rh));
-
-    let dx = cx - closestX;
-    let dy = cy - closestY;
-
-    return (dx * dx + dy * dy) < (cr * cr);
+  function circleRectCollide(cx,cy,cr,rx,ry,rw,rh){
+    const closestX = Math.max(rx, Math.min(cx, rx + rw));
+    const closestY = Math.max(ry, Math.min(cy, ry + rh));
+    const dx = cx - closestX, dy = cy - closestY;
+    return (dx*dx + dy*dy) < (cr*cr);
   }
 
-  function updatePlayer() {
-    let speed = player.speed;
-    if(player.fastTimer > 0) {
-      speed = player.maxSpeed;
+  // --- Atualiza jogador ---
+  function updatePlayer(){
+    let s = player.speed;
+    if(player.fastTimer > 0){
+      s = player.maxSpeed;
       player.fastTimer--;
     }
-    if(player.slowEnemyTimer > 0) {
-      player.slowEnemyTimer--;
+    const dx = ((keys.right?1:0) - (keys.left?1:0));
+    const dy = ((keys.down?1:0) - (keys.up?1:0));
+    let mx = dx, my = dy;
+    if(mx !== 0 && my !== 0){
+      mx *= Math.SQRT1_2;
+      my *= Math.SQRT1_2;
     }
-    if(player.shieldTimer > 0) {
-      player.shieldTimer--;
-    }
+    player.x += mx * s;
+    player.y += my * s;
 
-    let dx = 0, dy = 0;
-    if(keys.left) dx -= speed;
-    if(keys.right) dx += speed;
-    if(keys.up) dy -= speed;
-    if(keys.down) dy += speed;
-
-    if(dx !== 0 && dy !== 0) {
-      dx *= Math.SQRT1_2;
-      dy *= Math.SQRT1_2;
-    }
-
-    player.x += dx;
-    player.y += dy;
+    if(player.slowEnemyTimer > 0) player.slowEnemyTimer--;
+    if(player.shieldTimer > 0) player.shieldTimer--;
   }
 
-  function updateEnemies() {
+  // --- Atualiza inimigos ---
+  function updateEnemies(){
     const slow = player.slowEnemyTimer > 0;
-    enemies.forEach(e => {
-      const distance = dist(e, player);
-      if(distance > 600) return;
+    const frozen = performance.now() < enemiesFrozenUntil;
+    enemies.forEach(e=>{
+      // Se congelados, não movem
+      if(frozen) return;
 
-      let speed = e.speed;
-      if(slow) speed /= 2;
-
-      let dirX = player.x - e.x;
-      let dirY = player.y - e.y;
-      let len = Math.sqrt(dirX*dirX + dirY*dirY);
-      if(len === 0) return;
-
-      dirX /= len;
-      dirY /= len;
-
-      e.x += dirX * speed;
-      e.y += dirY * speed;
+      const d = distance(e.x, e.y, player.x, player.y);
+      if(d > ENEMY_STOP_DISTANCE) return;
+      let sp = e.speed;
+      if(slow) sp /= 2;
+      // direção normalizada
+      const dirX = (player.x - e.x)/d || 0;
+      const dirY = (player.y - e.y)/d || 0;
+      e.x += dirX * sp;
+      e.y += dirY * sp;
     });
   }
 
-  function canDamage(lastHitTime) {
-    const now = performance.now();
-    return !lastHitTime || (now - lastHitTime > 1000); // 1 seg cooldown
-  }
-
-  function handleCollisions() {
+  // --- Checa colisões e aplica efeitos ---
+  function handleCollisions(){
     const pSize = player.size + player.sizeIncrease;
     const px = player.x - pSize/2;
     const py = player.y - pSize/2;
 
     // Moedas
     coins = coins.filter(c => {
-      if(rectsCollide(px, py, pSize, pSize, c.x - c.size/2, c.y - c.size/2, c.size, c.size)) {
+      if(rectsCollide(px, py, pSize, pSize, c.x - c.size/2, c.y - c.size/2, c.size, c.size)){
         player.coins++;
-        player.sizeIncrease += 1;
-        if(player.sizeIncrease > 40) player.sizeIncrease = 40;
+        player.sizeIncrease = Math.min(player.sizeIncrease + 1, 40);
         updateUI();
         return false;
       }
@@ -373,20 +369,29 @@
 
     // Itens
     items = items.filter(item => {
-      if(rectsCollide(px, py, pSize, pSize, item.x - item.size/2, item.y - item.size/2, item.size, item.size)) {
-        switch(item.type) {
+      if(rectsCollide(px, py, pSize, pSize, item.x - item.size/2, item.y - item.size/2, item.size, item.size)){
+        switch(item.type){
           case 'life':
-            player.lives++;
-            if(player.lives > player.maxLives) player.lives = player.maxLives;
+            player.lives = Math.min(player.lives + 1, PLAYER_MAX_LIVES);
+            break;
+          case 'coinpack':
+            for(let k=0; k<6; k++){
+              const a = Math.random()*Math.PI*2;
+              const r = 30 + Math.random()*80;
+              coins.push({x: item.x + Math.cos(a)*r, y: item.y + Math.sin(a)*r, size: SIZES.coin});
+            }
             break;
           case 'speed':
-            player.fastTimer = 300; // 5 segundos a 60fps
+            player.fastTimer = 300; // 5s
             break;
           case 'slowEnemy':
             player.slowEnemyTimer = 300;
             break;
-          case 'shieldExtra':
-            player.shieldTimer = 600; // escudo dura 10 segundos
+          case 'shield':
+            player.shieldTimer = 300; // 5 segundos
+            break;
+          case 'extra':
+            player.lives = Math.min(player.lives + 1, PLAYER_MAX_LIVES);
             break;
         }
         updateUI();
@@ -395,225 +400,179 @@
       return true;
     });
 
-    // Colisões com inimigos
+    // Inimigos
     const now = performance.now();
     enemies.forEach(e => {
-      const eSize = e.size;
-      const ex = e.x - eSize/2;
-      const ey = e.y - eSize/2;
-      if(e.type === 'enemyCommon') {
-        if(rectsCollide(px, py, pSize, pSize, ex, ey, eSize, eSize)) {
-          if(canDamage(e.lastHitTime)) {
-            if(player.shieldTimer > 0) {
-              // Escudo bloqueia dano
-              e.lastHitTime = now;
-            } else {
-              player.lives--;
-              e.lastHitTime = now;
-              updateUI();
-              if(player.lives <= 0) {
-                gameOver = true;
-                deathReason = "Você foi morto por inimigo comum!";
-              }
-            }
+      const ex = e.x, ey = e.y, esize = e.size;
+      const dist = distance(player.x, player.y, ex, ey);
+      if(dist < (pSize/2 + esize/2)){
+        // Se tem escudo, ignora dano
+        if(player.shieldTimer > 0) return;
+
+        // Verifica cooldown para dano
+        if(now - e.lastDamageTime > DAMAGE_COOLDOWN_MS){
+          if(e.type === 'bee'){
+            player.lives -= 5;
+          } else {
+            player.lives--;
           }
-        }
-      } else if(e.type === 'enemyMax') {
-        if(rectsCollide(px, py, pSize, pSize, ex, ey, eSize, eSize)) {
-          if(canDamage(e.lastHitTime)) {
-            if(player.shieldTimer > 0) {
-              e.lastHitTime = now;
-            } else {
-              player.lives -= 5;
-              e.lastHitTime = now;
-              updateUI();
-              if(player.lives <= 0) {
-                gameOver = true;
-                deathReason = "Você morreu por inimigo max!";
-              }
-            }
-          }
-        }
-      } else if(e.type === 'bee') {
-        if(circleRectCollide(e.x, e.y, e.size/2, px, py, pSize, pSize)) {
-          if(canDamage(e.lastHitTime)) {
-            e.hitsOnPlayer++;
-            e.lastHitTime = now;
-            if(player.shieldTimer > 0) {
-              // Escudo bloqueia hit da abelha (não acumula hits)
-              e.hitsOnPlayer = 0;
-            } else {
-              if(e.hitsOnPlayer >= 3) {
-                gameOver = true;
-                deathReason = "Você foi morto por abelha!";
-              }
-            }
-          }
-        } else {
-          // Se abelha se afastou, reseta contagem
-          if(e.hitsOnPlayer > 0 && now - e.lastHitTime > 2000) {
-            e.hitsOnPlayer = 0;
+          e.lastDamageTime = now;
+          updateUI();
+          if(player.lives <= 0){
+            gameOver = true;
+            deathReason = (e.type === 'bee') ? 'Você foi morto por abelha' : 'Você foi morto por inimigo comum';
           }
         }
       }
     });
   }
 
-  // Desenhar jogador (com escudo ciano se ativo)
-  function drawPlayer() {
-    const size = player.size + player.sizeIncrease;
-    const cx = WIDTH/2;
-    const cy = HEIGHT/2;
-    // Jogador vermelho
-    ctx.fillStyle = colors.player;
-    ctx.fillRect(cx - size/2, cy - size/2, size, size);
+  // --- Desenha jogador ---
+  function drawPlayer(){
+    const s = player.size + player.sizeIncrease;
+    ctx.fillStyle = COLORS.player;
+    ctx.fillRect(WIDTH/2 - s/2, HEIGHT/2 - s/2, s, s);
+  }
 
-    // Escudo ciano se ativo
-    if(player.shieldTimer > 0) {
-      ctx.strokeStyle = colors.shield;
-      ctx.lineWidth = 5;
+  // --- Desenha moedas ---
+  function drawCoins(){
+    coins.forEach(c => {
+      ctx.fillStyle = COLORS.coin;
       ctx.beginPath();
-      ctx.rect(cx - size/2 - 5, cy - size/2 - 5, size + 10, size + 10);
-      ctx.stroke();
+      ctx.ellipse(WIDTH/2 + (c.x - player.x), HEIGHT/2 + (c.y - player.y), c.size/2, c.size/2, 0, 0, Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  // --- Desenha itens ---
+  function drawItems(){
+    items.forEach(i => {
+      let col = COLORS.grayItem;
+      switch(i.type){
+        case 'life': col = COLORS.life; break;
+        case 'coinpack': col = COLORS.coin; break;
+        case 'speed': col = COLORS.extra; break;
+        case 'slowEnemy': col = COLORS.slowEnemy; break;
+        case 'shield': col = COLORS.shield; break;
+        case 'extra': col = COLORS.cyanItem; break;
+      }
+      ctx.fillStyle = col;
+      ctx.fillRect(WIDTH/2 + (i.x - player.x) - i.size/2, HEIGHT/2 + (i.y - player.y) - i.size/2, i.size, i.size);
+    });
+  }
+
+  // --- Desenha inimigos ---
+  function drawEnemies(){
+    enemies.forEach(e => {
+      let col = COLORS.enemyCommon;
+      if(e.type === 'enemyMax') col = COLORS.enemyMax;
+      else if(e.type === 'bee') col = COLORS.bee;
+      ctx.fillStyle = col;
+      ctx.fillRect(WIDTH/2 + (e.x - player.x) - e.size/2, HEIGHT/2 + (e.y - player.y) - e.size/2, e.size, e.size);
+    });
+  }
+
+  // --- Desenha triângulo apito ---
+  function drawWhistle(){
+    const size = 40;
+    const x = WIDTH - size - 15;
+    const y = HEIGHT - size - 15;
+    const now = performance.now();
+    const ready = (now - whistleLastUse) > WHISTLE_COOLDOWN_MS;
+    ctx.fillStyle = ready ? COLORS.whistleReady : COLORS.whistleCooldown;
+    ctx.beginPath();
+    ctx.moveTo(x, y + size);
+    ctx.lineTo(x + size/2, y);
+    ctx.lineTo(x + size, y + size);
+    ctx.closePath();
+    ctx.fill();
+
+    // Texto de cooldown
+    if(!ready){
+      const cd = Math.ceil((WHISTLE_COOLDOWN_MS - (now - whistleLastUse))/1000);
+      ctx.fillStyle = '#000';
+      ctx.font = '18px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(`Cooldown: ${cd}s`, x + size/2, y - 10);
     }
   }
 
-  function drawCoins() {
-    ctx.fillStyle = colors.coin;
-    coins.forEach(c => {
-      const sx = WIDTH/2 + (c.x - player.x);
-      const sy = HEIGHT/2 + (c.y - player.y);
-      ctx.fillRect(sx - c.size/2, sy - c.size/2, c.size, c.size);
-    });
-  }
-
-  function drawItems() {
-    items.forEach(item => {
-      const sx = WIDTH/2 + (item.x - player.x);
-      const sy = HEIGHT/2 + (item.y - player.y);
-      switch(item.type) {
-        case 'life': ctx.fillStyle = colors.life; break;
-        case 'speed': ctx.fillStyle = colors.speed; break;
-        case 'slowEnemy': ctx.fillStyle = colors.slowEnemy; break;
-        case 'shieldExtra': ctx.fillStyle = colors.shield; break;
-        default: ctx.fillStyle = 'gray';
+  // --- Lógica clique no apito ---
+  canvas.addEventListener('click', (e) => {
+    const size = 40;
+    const x = WIDTH - size - 15;
+    const y = HEIGHT - size - 15;
+    if(e.clientX >= x && e.clientX <= x + size && e.clientY >= y && e.clientY <= y + size){
+      const now = performance.now();
+      if(now - whistleLastUse > WHISTLE_COOLDOWN_MS){
+        whistleLastUse = now;
+        enemiesFrozenUntil = now + WHISTLE_FREEZE_MS;
       }
-      ctx.fillRect(sx - item.size/2, sy - item.size/2, item.size, item.size);
-    });
-  }
+    }
+  });
 
-  function drawEnemies() {
-    enemies.forEach(e => {
-      const sx = WIDTH/2 + (e.x - player.x);
-      const sy = HEIGHT/2 + (e.y - player.y);
-
-      if(e.type === 'bee') {
-        ctx.fillStyle = colors.bee;
-        ctx.beginPath();
-        ctx.arc(sx, sy, e.size/2, 0, Math.PI*2);
-        ctx.fill();
-      } else {
-        switch(e.type) {
-          case 'enemyCommon': ctx.fillStyle = colors.enemyCommon; break;
-          case 'enemyMax': ctx.fillStyle = colors.enemyMax; break;
-          default: ctx.fillStyle = 'gray';
-        }
-        ctx.fillRect(sx - e.size/2, sy - e.size/2, e.size, e.size);
-      }
-    });
-  }
-
-  function showGameOver() {
-    messageElem.textContent = deathReason;
-    messageElem.style.display = 'block';
-    restartBtn.style.display = 'block';
-  }
-
-  function gameLoop() {
-    if(gameOver) {
-      showGameOver();
+  // --- Loop principal ---
+  function gameLoop(){
+    if(gameOver){
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = '#b00';
+      ctx.font = '40px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over!', WIDTH/2, HEIGHT/2 - 40);
+      ctx.font = '24px Arial';
+      ctx.fillText(deathReason, WIDTH/2, HEIGHT/2);
+      restartBtn.style.display = 'block';
       return;
     }
-    ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    ctx.fillStyle = 'white';
+
+    // Limpa tela
+    ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
     updatePlayer();
     updateEnemies();
     handleCollisions();
 
-    // Spawn frequente de inimigos/moedas/itens
-    if(enemies.filter(e => e.type === 'enemyCommon').length < 3) {
-      let pos = spawnAroundPlayer(500, 1500);
-      enemies.push({
-        x: pos.x, y: pos.y,
-        size: sizes.enemyCommon,
-        speed: 1.5,
-        type: 'enemyCommon',
-        lastHitTime: 0,
-      });
-    }
-    if(enemies.filter(e => e.type === 'enemyMax').length < 1 && Math.random() < 0.005) {
-      let pos = spawnAroundPlayer(500, 1500);
-      enemies.push({
-        x: pos.x, y: pos.y,
-        size: sizes.enemyMax,
-        speed: 1,
-        type: 'enemyMax',
-        lastHitTime: 0,
-      });
-    }
-    if(enemies.filter(e => e.type === 'bee').length < 1 && Math.random() < 0.005) {
-      let pos = spawnAroundPlayer(500, 1500);
-      enemies.push({
-        x: pos.x, y: pos.y,
-        size: sizes.bee,
-        speed: 2,
-        type: 'bee',
-        hitsOnPlayer: 0,
-        lastHitTime: 0,
-      });
-    }
-    if(coins.length < 50 && Math.random() < 0.02) {
-      let pos = spawnAroundPlayer(500, 1500);
-      coins.push({x: pos.x, y: pos.y, size: sizes.coin});
-    }
-    if(items.length < 10 && Math.random() < 0.01) {
-      let pos = spawnAroundPlayer(500, 1500);
-      const itemTypes = ['life', 'speed', 'slowEnemy', 'shieldExtra'];
-      let type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-      items.push({
-        x: pos.x, y: pos.y, size: sizes[type], type
-      });
-    }
-
     drawCoins();
     drawItems();
     drawEnemies();
     drawPlayer();
+    drawWhistle();
 
     requestAnimationFrame(gameLoop);
   }
 
-  restartBtn.onclick = () => {
-    messageElem.style.display = 'none';
+  // --- Reiniciar ---
+  restartBtn.addEventListener('click', () => {
     restartBtn.style.display = 'none';
     spawnInitial();
+    gameOver = false;
+    deathReason = '';
+    updateUI();
     gameLoop();
-  };
+  });
 
-  // Inicializa jogo
-  spawnInitial();
-  gameLoop();
-
+  // --- Redimensionar ---
   window.addEventListener('resize', () => {
     WIDTH = window.innerWidth;
     HEIGHT = window.innerHeight;
     canvas.width = WIDTH;
     canvas.height = HEIGHT;
   });
+
+  // --- Iniciar ---
+  spawnInitial();
+  gameLoop();
+
+  // --- Spawn periódico de itens ---
+  setInterval(() => {
+    if(!gameOver){
+      spawnItemsPeriodically();
+    }
+  }, ITEM_RESPAWN_INTERVAL_MS);
+
 })();
 </script>
-
 </body>
 </html>
